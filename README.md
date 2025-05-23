@@ -1,13 +1,13 @@
 # Electron Media Patch
 
-Electron patches for HEVC, AC3 and E-AC-3 codec support.
+Electron patches for HEVC, AC3 and E-AC3 codec support.
 
 > [!NOTE]
-> Due to licensing issues, only patches will be provided. You will need to build Electron yourself.
+> Work in progress
 
 ## Versions
 
-- [ ] Electron [v36.2.1](https://releases.electronjs.org/release/compare/v36.2.0/v36.2.1)
+- [x] Electron [v36.2.1](https://releases.electronjs.org/release/compare/v36.2.0/v36.2.1)
   - [x] Tested on macOS
   - [ ] Tested on Windows
   - [ ] Tested on Linux
