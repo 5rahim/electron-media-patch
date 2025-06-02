@@ -147,5 +147,10 @@ ninja -C out/Release electron:electron_dist_zip
 ## Acknowledgements
 
 - [enable-chromium-hevc-hardware-decoding](https://github.com/StaZhu/enable-chromium-hevc-hardware-decoding) - HEVC patches
+
+<p align="center">
+<!-- real-sponsors --><a href="https://github.com/Rinkerbel"><img src="https:&#x2F;&#x2F;github.com&#x2F;Rinkerbel.png" width="60px" alt="User avatar: Rinkerbel" /></a>&nbsp;&nbsp;<a href="https://github.com/MidnightKittenCat"><img src="https:&#x2F;&#x2F;github.com&#x2F;MidnightKittenCat.png" width="60px" alt="User avatar: MidnightKittenCat" /></a><!-- real-sponsors -->
+</p>
+
 - @Rinkerbel - Windows build
 - @MidnightKittenCat - Linux build
