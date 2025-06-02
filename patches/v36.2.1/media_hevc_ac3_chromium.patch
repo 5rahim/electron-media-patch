@@ -1,0 +1,225 @@
+diff --git a/build/config/unsafe_buffers_paths.txt b/build/config/unsafe_buffers_paths.txt
+index 80abde70e495e..7eaa4df66a24d 100644
+--- a/build/config/unsafe_buffers_paths.txt
++++ b/build/config/unsafe_buffers_paths.txt
+@@ -30,4 +30,4 @@
+ -ui/gl/  # Unsafe generated files.
+ -url/third_party/
+ -v8/
+-
++-media/formats/
+\ No newline at end of file
+diff --git a/media/base/supported_types.cc b/media/base/supported_types.cc
+index 2ce29798709ef..23bcb34873650 100644
+--- a/media/base/supported_types.cc
++++ b/media/base/supported_types.cc
+@@ -229,25 +229,7 @@ bool IsAudioCodecProprietary(AudioCodec codec) {
+ #endif  // !BUILDFLAG(USE_PROPRIETARY_CODECS)
+ 
+ bool IsDecoderHevcProfileSupported(const VideoType& type) {
+-  if (!IsDecoderColorSpaceSupported(type.color_space)) {
+-    return false;
+-  }
+-
+-#if BUILDFLAG(ENABLE_PLATFORM_HEVC)
+-#if BUILDFLAG(PLATFORM_HAS_OPTIONAL_HEVC_DECODE_SUPPORT)
+-#if BUILDFLAG(IS_CHROMEOS)
+-  if (!base::FeatureList::IsEnabled(kPlatformHEVCDecoderSupport)) {
+-    return false;
+-  }
+-#endif  // BUILDFLAG(IS_CHROMEOS)
+-  return GetSupplementalDecoderVideoProfileCache()->IsProfileSupported(
+-      type.profile);
+-#else
+   return true;
+-#endif  // BUIDFLAG(PLATFORM_HAS_OPTIONAL_HEVC_DECODE_SUPPORT)
+-#else
+-  return false;
+-#endif  // BUILDFLAG(ENABLE_PLATFORM_HEVC)
+ }
+ 
+ bool IsDecoderVp9ProfileSupported(const VideoType& type) {
+@@ -586,7 +568,7 @@ bool IsEncoderOptionalVideoType(const media::VideoType& type) {
+ 
+ bool IsDecoderBuiltInVideoCodec(VideoCodec codec) {
+ #if BUILDFLAG(ENABLE_FFMPEG_VIDEO_DECODERS) && BUILDFLAG(USE_PROPRIETARY_CODECS)
+-  if (codec == VideoCodec::kH264) {
++  if (codec == VideoCodec::kH264 || codec == VideoCodec::kHEVC) {
+     return true;
+   }
+ #endif  // BUILDFLAG(ENABLE_FFMPEG_VIDEO_DECODERS) &&
+diff --git a/media/ffmpeg/ffmpeg_common.cc b/media/ffmpeg/ffmpeg_common.cc
+index cfd0552ee3108..29452291bde43 100644
+--- a/media/ffmpeg/ffmpeg_common.cc
++++ b/media/ffmpeg/ffmpeg_common.cc
+@@ -67,7 +67,7 @@ VideoColorSpace GetGuessedColorSpace(const VideoColorSpace& color_space) {
+ const char* GetAllowedVideoDecoders() {
+   // This should match the configured lists in //third_party/ffmpeg.
+ #if BUILDFLAG(USE_PROPRIETARY_CODECS) && BUILDFLAG(ENABLE_FFMPEG_VIDEO_DECODERS)
+-  return "h264";
++  return "h264,hevc";
+ #else
+   return "";
+ #endif
+diff --git a/media/ffmpeg/scripts/build_ffmpeg.py b/media/ffmpeg/scripts/build_ffmpeg.py
+index 3661b91740ae0..822b09149916f 100755
+--- a/media/ffmpeg/scripts/build_ffmpeg.py
++++ b/media/ffmpeg/scripts/build_ffmpeg.py
+@@ -987,9 +987,9 @@ def ConfigureAndBuild(target_arch, target_os, host_os, host_arch,
+ 
+     # Google Chrome specific configuration.
+     configure_flags['Chrome'].extend([
+-        '--enable-decoder=aac,h264',
+-        '--enable-demuxer=aac',
+-        '--enable-parser=aac,h264',
++        '--enable-decoder=aac,h264,mp3,eac3,ac3,hevc,mpeg4,mpegvideo,mp2,mp1,flac',
++        '--enable-demuxer=aac,mp3,mov,dtshd,dts,avi,mpegvideo,m4v,h264,vc1,flac',
++        '--enable-parser=aac,h264,mpegaudio,mpeg4video,mpegvideo,ac3,h261,vc1,h263,flac',
+     ])
+ 
+     configure_flags['ChromeAndroid'].extend([
+diff --git a/media/filters/ffmpeg_video_decoder.cc b/media/filters/ffmpeg_video_decoder.cc
+index 2bb60fbbc2f8f..d10735721e195 100644
+--- a/media/filters/ffmpeg_video_decoder.cc
++++ b/media/filters/ffmpeg_video_decoder.cc
+@@ -80,19 +80,19 @@ static int GetFFmpegVideoDecoderThreadCount(const VideoDecoderConfig& config) {
+   // Only add more threads for those codecs that we know will benefit.
+   switch (config.codec()) {
+     case VideoCodec::kUnknown:
++      // We do not compile ffmpeg with support for any of these codecs.
++      NOTREACHED();
++
++    case VideoCodec::kH264:
++    case VideoCodec::kHEVC:
+     case VideoCodec::kVC1:
+     case VideoCodec::kMPEG2:
+-    case VideoCodec::kHEVC:
+     case VideoCodec::kVP9:
+     case VideoCodec::kAV1:
+     case VideoCodec::kDolbyVision:
+     case VideoCodec::kTheora:
+     case VideoCodec::kMPEG4:
+     case VideoCodec::kVP8:
+-      // We do not compile ffmpeg with support for any of these codecs.
+-      NOTREACHED();
+-
+-    case VideoCodec::kH264:
+       // Normalize to three threads for 1080p content, then scale linearly
+       // with number of pixels.
+       // Examples:
+@@ -126,8 +126,9 @@ static void ReleaseVideoBufferImpl(void* opaque, uint8_t* data) {
+ 
+ // static
+ bool FFmpegVideoDecoder::IsCodecSupported(VideoCodec codec) {
+-  // We only build support for H.264.
+-  return codec == VideoCodec::kH264 && IsDecoderBuiltInVideoCodec(codec);
++  // We only build support for H.264 / H.265.
++  return (codec == VideoCodec::kH264 || codec == VideoCodec::kHEVC) &&
++         IsDecoderBuiltInVideoCodec(codec);
+ }
+ 
+ FFmpegVideoDecoder::FFmpegVideoDecoder(MediaLog* media_log)
+@@ -150,8 +151,9 @@ int FFmpegVideoDecoder::GetVideoBuffer(struct AVCodecContext* codec_context,
+   const auto format = AVPixelFormatToVideoPixelFormat(
+       static_cast<AVPixelFormat>(frame->format));
+ 
+-  if (format == PIXEL_FORMAT_UNKNOWN)
++  if (format == PIXEL_FORMAT_UNKNOWN) {
+     return AVERROR(EINVAL);
++  }
+   DCHECK(format == PIXEL_FORMAT_I420 || format == PIXEL_FORMAT_I422 ||
+          format == PIXEL_FORMAT_I444 || format == PIXEL_FORMAT_YUV420P9 ||
+          format == PIXEL_FORMAT_YUV420P10 || format == PIXEL_FORMAT_YUV422P9 ||
+@@ -163,8 +165,9 @@ int FFmpegVideoDecoder::GetVideoBuffer(struct AVCodecContext* codec_context,
+   gfx::Size coded_size(frame->width, frame->height);
+   const int ret =
+       av_image_check_size(coded_size.width(), coded_size.height(), 0, nullptr);
+-  if (ret < 0)
++  if (ret < 0) {
+     return ret;
++  }
+ 
+   VideoAspectRatio aspect_ratio = config_.aspect_ratio();
+   if (!aspect_ratio.IsValid() && codec_context->sample_aspect_ratio.num > 0) {
+@@ -177,8 +180,9 @@ int FFmpegVideoDecoder::GetVideoBuffer(struct AVCodecContext* codec_context,
+   // since we don't use this, just DCHECK that it's zero.
+   DCHECK_EQ(codec_context->lowres, 0);
+ 
+-  if (force_allocation_error_)
++  if (force_allocation_error_) {
+     return AVERROR(ENOMEM);
++  }
+ 
+   // FFmpeg has specific requirements on the allocation size of the frame.  The
+   // following logic replicates FFmpeg's allocation strategy to ensure buffers
+@@ -313,8 +317,9 @@ void FFmpegVideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
+     return;
+   }
+ 
+-  if (buffer->end_of_stream())
++  if (buffer->end_of_stream()) {
+     state_ = DecoderState::kDecodeFinished;
++  }
+ 
+   // VideoDecoderShim expects that |decode_cb| is called only after
+   // |output_cb_|.
+@@ -337,8 +342,9 @@ void FFmpegVideoDecoder::Reset(base::OnceClosure closure) {
+ FFmpegVideoDecoder::~FFmpegVideoDecoder() {
+   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+ 
+-  if (state_ != DecoderState::kUninitialized)
++  if (state_ != DecoderState::kUninitialized) {
+     ReleaseFFmpegResources();
++  }
+ 
+   if (frame_pool_) {
+     frame_pool_->Shutdown();
+diff --git a/third_party/boringssl/src b/third_party/boringssl/src
+index a9993612faac4..8df0c5f2e7dd4 160000
+--- a/third_party/boringssl/src
++++ b/third_party/boringssl/src
+@@ -1 +1 @@
+-Subproject commit a9993612faac4866bc33ca8ff37bfd0659af1c48
++Subproject commit 8df0c5f2e7dd4a17b6abf706ef230da170c2f536
+diff --git a/third_party/devtools-frontend/src b/third_party/devtools-frontend/src
+index e793e21a020b5..b00f5098315d9 160000
+--- a/third_party/devtools-frontend/src
++++ b/third_party/devtools-frontend/src
+@@ -1 +1 @@
+-Subproject commit e793e21a020b53a66ae13ef8673f80b8e8a73746
++Subproject commit b00f5098315d9d84e7ffd79d966580a442c96a8b
+diff --git a/third_party/ffmpeg b/third_party/ffmpeg
+index fbce2a76c00cd..fc432d10b24b4 160000
+--- a/third_party/ffmpeg
++++ b/third_party/ffmpeg
+@@ -1 +1 @@
+-Subproject commit fbce2a76c00cd2e5aeffe3c2e71d44c284ec52d6
++Subproject commit fc432d10b24b439387869191ca8cf4bac2b7e297
+diff --git a/third_party/perfetto b/third_party/perfetto
+index 054635b914538..d648b7004810c 160000
+--- a/third_party/perfetto
++++ b/third_party/perfetto
+@@ -1 +1 @@
+-Subproject commit 054635b91453895720951f7329619d003a98b3e4
++Subproject commit d648b7004810c54e640fa7a1cf2c8d6634d72256
+diff --git a/third_party/sqlite/src b/third_party/sqlite/src
+index 8a22b25ad7244..24daffe2e9b3a 160000
+--- a/third_party/sqlite/src
++++ b/third_party/sqlite/src
+@@ -1 +1 @@
+-Subproject commit 8a22b25ad7244abaf07e372cc6dc97e041d663a9
++Subproject commit 24daffe2e9b3aa091848c78ae982276969b47cb9
+diff --git a/third_party/webrtc b/third_party/webrtc
+index 2c8f5be6924d5..933c7285f8272 160000
+--- a/third_party/webrtc
++++ b/third_party/webrtc
+@@ -1 +1 @@
+-Subproject commit 2c8f5be6924d507ee74191b1aeadcec07f747f21
++Subproject commit 933c7285f8272d9a141be331632f484a4b2ee38a
+diff --git a/v8 b/v8
+index b6178615ecae6..45a12651bc72f 160000
+--- a/v8
++++ b/v8
+@@ -1 +1 @@
+-Subproject commit b6178615ecae6d84b347cb7a1812cad9afca51f2
++Subproject commit 45a12651bc72ff016184a480b16fa5428b4e3bc5

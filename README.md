@@ -2,15 +2,12 @@
 
 Electron patches for HEVC, AC3 and E-AC3 codec support.
 
-> [!NOTE]
-> Work in progress
-
 ## Versions
 
 - [x] Electron [v36.2.1](https://releases.electronjs.org/release/compare/v36.2.0/v36.2.1)
   - [x] Tested on macOS
   - [x] Tested on Windows
-  - [ ] Tested on Linux
+  - [x] Tested on Linux
 
 ## Guide
 
@@ -150,3 +147,5 @@ ninja -C out/Release electron:electron_dist_zip
 ## Acknowledgements
 
 - [enable-chromium-hevc-hardware-decoding](https://github.com/StaZhu/enable-chromium-hevc-hardware-decoding) - HEVC patches
+- @Rinkerbel - Windows build
+- @MidnightKittenCat - Linux build

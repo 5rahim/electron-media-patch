@@ -1,0 +1,39 @@
+diff --git a/build/args/release.gn b/build/args/release.gn
+index 77351cc181..5874f046e4 100644
+--- a/build/args/release.gn
++++ b/build/args/release.gn
+@@ -2,8 +2,22 @@ import("//electron/build/args/all.gn")
+ is_component_build = false
+ is_official_build = true
+
++enable_hevc_parser_and_hw_decoder=true
++enable_platform_ac3_eac3_audio=true
++enable_platform_dolby_vision=true
++enable_platform_mpeg_h_audio=true
++enable_platform_ac4_audio=true
++enable_platform_dts_audio=true
++enable_platform_hevc=true
++ffmpeg_branding="Chrome"
++proprietary_codecs=true
++blink_symbol_level=0
++enable_nacl=false
++v8_symbol_level=0
++symbol_level=0
++
+ # By default, Electron builds ffmpeg with proprietary codecs enabled. In order
+ # to facilitate users who don't want to ship proprietary codecs in ffmpeg, or
+ # who have an LGPL requirement to ship ffmpeg as a dynamically linked library,
+ # we build ffmpeg as a shared library.
+-is_component_ffmpeg = true
++is_component_ffmpeg = false
+diff --git a/electron_unsafe_buffers_paths.txt b/electron_unsafe_buffers_paths.txt
+index 62ed395531..0d8160f354 100644
+--- a/electron_unsafe_buffers_paths.txt
++++ b/electron_unsafe_buffers_paths.txt
+@@ -33,3 +33,4 @@
+ -ui/
+ -url/
+ -v8/
++-media/formats/
++-media/utils/
+\ No newline at end of file
